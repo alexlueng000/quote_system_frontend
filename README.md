@@ -14,10 +14,13 @@ pnpm dev
 bun dev
 ```
 
-Configure the backend API base URL in `.env.local`:
+By default, the frontend calls the same hostname as the page with backend port `8002`.
+For example, if the page is opened at `http://192.168.1.10:3000`, API requests go to `http://192.168.1.10:8002`.
+
+You can override the backend API base URL in `.env.local` when needed:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8002
+NEXT_PUBLIC_API_BASE_URL=http://192.168.1.10:8002
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
