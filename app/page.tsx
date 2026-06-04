@@ -164,7 +164,7 @@ type Statistics = {
   open_rate: string;
 };
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8002";
 const roleOptions: { label: string; value: UserRole }[] = [
   { label: "顾问", value: "consultant" },
   { label: "管理员", value: "admin" },
