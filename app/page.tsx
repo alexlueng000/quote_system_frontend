@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -164,10 +164,7 @@ type Statistics = {
   open_rate: string;
 };
 
-const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/$/, "");
-const apiBase =
-  configuredApiBase ||
-  (typeof window === "undefined" ? "" : `${window.location.protocol}//${window.location.hostname}:8002`);
+const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1").trim().replace(/\/$/, "");
 const roleOptions: { label: string; value: UserRole }[] = [
   { label: "顾问", value: "consultant" },
   { label: "管理员", value: "admin" },
@@ -298,7 +295,7 @@ export default function Home() {
   useEffect(() => {
     async function loadBootstrap(): Promise<void> {
       try {
-        const response = await fetch(`${apiBase}/api/v1/bootstrap`);
+        const response = await fetch(`${apiBase}/bootstrap`);
         if (!response.ok) {
           throw new Error("bootstrap failed");
         }
@@ -319,7 +316,7 @@ export default function Home() {
   useEffect(() => {
     async function generatePreview(): Promise<void> {
       try {
-        const response = await fetch(`${apiBase}/api/v1/quotations/generate`, {
+        const response = await fetch(`${apiBase}/quotations/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(previewPayload),
@@ -347,10 +344,10 @@ export default function Home() {
       }
       try {
         const [feeResponse, translationResponse] = await Promise.all([
-          fetch(`${apiBase}/api/v1/fee-rules`, {
+          fetch(`${apiBase}/fee-rules`, {
             headers: authHeaders(authToken, selectedUser.email),
           }),
-          fetch(`${apiBase}/api/v1/translation-rules`, {
+          fetch(`${apiBase}/translation-rules`, {
             headers: authHeaders(authToken, selectedUser.email),
           }),
         ]);
@@ -377,7 +374,7 @@ export default function Home() {
         return;
       }
       try {
-        const response = await fetch(`${apiBase}/api/v1/users`, {
+        const response = await fetch(`${apiBase}/users`, {
           headers: authHeaders(authToken, selectedUser.email),
         });
         if (!response.ok) {
@@ -404,7 +401,7 @@ export default function Home() {
         return;
       }
       try {
-        const response = await fetch(`${apiBase}/api/v1/quotations`, {
+        const response = await fetch(`${apiBase}/quotations`, {
           headers: authHeaders(authToken, selectedUser.email),
         });
         if (!response.ok) {
@@ -430,7 +427,7 @@ export default function Home() {
         return;
       }
       try {
-        const response = await fetch(`${apiBase}/api/v1/statistics`, {
+        const response = await fetch(`${apiBase}/statistics`, {
           headers: authHeaders(authToken, selectedUser.email),
         });
         if (!response.ok) {
@@ -453,7 +450,7 @@ export default function Home() {
     }
     const payload = { ...form, consultant_email: selectedUser.email };
     try {
-      const response = await fetch(`${apiBase}/api/v1/quotations`, {
+      const response = await fetch(`${apiBase}/quotations`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
         body: JSON.stringify(payload),
@@ -500,7 +497,7 @@ export default function Home() {
       return;
     }
     try {
-      const response = await fetch(`${apiBase}/api/v1/quotations/${id}/status`, {
+      const response = await fetch(`${apiBase}/quotations/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
         body: JSON.stringify({ status }),
@@ -525,7 +522,7 @@ export default function Home() {
       return;
     }
     setRulesMessage("");
-    const response = await fetch(`${apiBase}/api/v1/fee-rules/${rule.id}`, {
+    const response = await fetch(`${apiBase}/fee-rules/${rule.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({
@@ -550,7 +547,7 @@ export default function Home() {
       return;
     }
     setRulesMessage("");
-    const response = await fetch(`${apiBase}/api/v1/translation-rules/${rule.id}`, {
+    const response = await fetch(`${apiBase}/translation-rules/${rule.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({
@@ -583,7 +580,7 @@ export default function Home() {
       return;
     }
     setUsersMessage("");
-    const response = await fetch(`${apiBase}/api/v1/users`, {
+    const response = await fetch(`${apiBase}/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify(userForm),
@@ -604,7 +601,7 @@ export default function Home() {
       return;
     }
     setUsersMessage("");
-    const response = await fetch(`${apiBase}/api/v1/users/${user.id}`, {
+    const response = await fetch(`${apiBase}/users/${user.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({
@@ -637,7 +634,7 @@ export default function Home() {
       return;
     }
     setUsersMessage("");
-    const response = await fetch(`${apiBase}/api/v1/users/${userId}/password`, {
+    const response = await fetch(`${apiBase}/users/${userId}/password`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({ password }),
@@ -661,7 +658,7 @@ export default function Home() {
       return;
     }
     setFollowupMessage("");
-    const response = await fetch(`${apiBase}/api/v1/quotations/${quotation.id}/followups`, {
+    const response = await fetch(`${apiBase}/quotations/${quotation.id}/followups`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({
@@ -725,7 +722,7 @@ export default function Home() {
         return;
       }
       try {
-        const response = await fetch(`${apiBase}/api/v1/quotations/${selectedQuotation.id}/followups`, {
+        const response = await fetch(`${apiBase}/quotations/${selectedQuotation.id}/followups`, {
           headers: authHeaders(authToken, selectedUser.email),
         });
         if (!response.ok) {
@@ -755,7 +752,7 @@ export default function Home() {
         onLogin={async () => {
           setLoginError("");
           try {
-            const response = await fetch(`${apiBase}/api/v1/auth/login`, {
+            const response = await fetch(`${apiBase}/auth/login`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -1547,7 +1544,7 @@ function QuotationList({
   isAdmin: boolean;
 }) {
   function exportQuotation(id: string): void {
-    window.open(`${apiBase}/api/v1/quotations/${id}/export`, "_blank", "noopener,noreferrer");
+    window.open(`${apiBase}/quotations/${id}/export`, "_blank", "noopener,noreferrer");
   }
 
   function updateFilter(key: keyof typeof filters, value: string): void {
@@ -1725,7 +1722,7 @@ function QuotationDetail({
   createFollowup: (quotation: Quotation, event: FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
   function exportQuotation(): void {
-    window.open(`${apiBase}/api/v1/quotations/${quotation.id}/export`, "_blank", "noopener,noreferrer");
+    window.open(`${apiBase}/quotations/${quotation.id}/export`, "_blank", "noopener,noreferrer");
   }
 
   const basicRows = [
@@ -2092,3 +2089,4 @@ function formatDateTime(value: string): string {
 function authHeaders(token: string, email: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : { "X-User-Email": email };
 }
+

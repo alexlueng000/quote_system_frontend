@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
+const backendApiBaseUrl = process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8002";
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${backendApiBaseUrl.replace(/\/$/, "")}/api/v1/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -14,13 +14,13 @@ pnpm dev
 bun dev
 ```
 
-By default, the frontend calls the same hostname as the page with backend port `8002`.
-For example, if the page is opened at `http://192.168.1.10:3000`, API requests go to `http://192.168.1.10:8002`.
+By default, the browser calls the frontend origin at `/api/v1`, and Next.js proxies those requests to the backend from the server side. This means the backend port does not need to be exposed to users.
 
-You can override the backend API base URL in `.env.local` when needed:
+Configure the proxy target in `.env.local`:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://192.168.1.10:8002
+BACKEND_API_BASE_URL=http://127.0.0.1:8002
+NEXT_PUBLIC_API_BASE_URL=/api/v1
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
