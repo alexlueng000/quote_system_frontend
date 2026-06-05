@@ -4,18 +4,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApprovalPanel,
-  DraftWorkbench,
-  LoginScreen,
-  NotesPanel,
-  QuotationDetail,
-  QuotationFormView,
-  QuotationList,
   RulesPanel,
-  StatisticsPanel,
-  SummaryPanel,
-  TabButton,
   UsersPanel,
-} from "./components";
+} from "./components/admin";
+import { LoginScreen, NotesPanel, StatisticsPanel, SummaryPanel } from "./components/common";
+import { DraftWorkbench, QuotationFormView } from "./components/drafts";
+import { QuotationDetail, QuotationList } from "./components/quotations";
+import { MobileNav, Sidebar } from "./components/sidebar";
 import { fallbackBootstrap, importantNotes, initialFollowupForm, initialForm, initialUserForm } from "./constants";
 import type {
   ActiveTab,
@@ -784,6 +779,13 @@ export default function Home() {
     void loadApprovalRequests();
   }
 
+  function logout(): void {
+    setSelectedUser(null);
+    setAuthToken("");
+    setLoginPassword("");
+    setSelectedQuotationId(null);
+  }
+
   useEffect(() => {
     if (!selectedUser || !selectedQuotation || followupsByQuotationId[selectedQuotation.id]) {
       return;
@@ -847,41 +849,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[oklch(97%_0.012_178)] text-[oklch(18%_0.025_180)]">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-[oklch(82%_0.025_178)] bg-[oklch(94%_0.018_178)] px-5 py-6 lg:block">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[oklch(45%_0.07_178)]">ZYIP Quote</p>
-            <h1 className="mt-2 text-2xl font-semibold">新案基础报价</h1>
-            <p className="mt-3 text-sm text-[oklch(42%_0.045_178)]">
-              {selectedUser.name} · {selectedUser.role === "admin" ? "管理员" : "顾问"}
-            </p>
-          </div>
-          <nav className="space-y-2">
-            <TabButton active={activeTab === "create"} label="报价工作台" onClick={() => setActiveTab("create")} />
-            <TabButton active={activeTab === "list"} label={selectedUser.role === "admin" ? "全部报价" : "我的报价"} onClick={() => setActiveTab("list")} />
-            <TabButton active={activeTab === "stats"} label="统计看板" onClick={() => setActiveTab("stats")} />
-            {selectedUser.role === "admin" ? (
-              <TabButton active={activeTab === "rules"} label="价格规则" onClick={() => setActiveTab("rules")} />
-            ) : null}
-            {["consultant", "admin", "approver"].includes(selectedUser.role) ? (
-              <TabButton active={activeTab === "approvals"} label="审批解锁" onClick={openApprovalsTab} />
-            ) : null}
-            {selectedUser.role === "admin" ? (
-              <TabButton active={activeTab === "users"} label="用户管理" onClick={() => setActiveTab("users")} />
-            ) : null}
-            <button
-              className="h-10 w-full rounded-md px-4 text-left text-sm font-medium text-[oklch(40%_0.05_28)] transition hover:bg-[oklch(91%_0.026_28)]"
-              type="button"
-              onClick={() => {
-                setSelectedUser(null);
-                setAuthToken("");
-                setLoginPassword("");
-                setSelectedQuotationId(null);
-              }}
-            >
-              退出登录
-            </button>
-          </nav>
-        </aside>
+        <Sidebar
+          activeTab={activeTab}
+          user={selectedUser}
+          setActiveTab={setActiveTab}
+          openApprovalsTab={openApprovalsTab}
+          logout={logout}
+        />
 
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="border-b border-[oklch(84%_0.025_178)] bg-[oklch(98%_0.008_178)] px-4 py-4 sm:px-8">
@@ -899,20 +873,12 @@ export default function Home() {
                 </span>
               </div>
             </div>
-            <div className="mt-4 flex gap-2 lg:hidden">
-              <TabButton active={activeTab === "create"} label="工作台" onClick={() => setActiveTab("create")} />
-              <TabButton active={activeTab === "list"} label="报价" onClick={() => setActiveTab("list")} />
-              <TabButton active={activeTab === "stats"} label="统计" onClick={() => setActiveTab("stats")} />
-              {selectedUser.role === "admin" ? (
-                <TabButton active={activeTab === "rules"} label="规则" onClick={() => setActiveTab("rules")} />
-              ) : null}
-              {["consultant", "admin", "approver"].includes(selectedUser.role) ? (
-                <TabButton active={activeTab === "approvals"} label="审批" onClick={openApprovalsTab} />
-              ) : null}
-              {selectedUser.role === "admin" ? (
-                <TabButton active={activeTab === "users"} label="用户" onClick={() => setActiveTab("users")} />
-              ) : null}
-            </div>
+            <MobileNav
+              activeTab={activeTab}
+              user={selectedUser}
+              setActiveTab={setActiveTab}
+              openApprovalsTab={openApprovalsTab}
+            />
           </header>
 
           <div className={`grid flex-1 gap-6 px-4 py-6 sm:px-8 ${showWorkspaceAside ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
