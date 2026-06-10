@@ -1,7 +1,13 @@
-import type { GeneratedQuotation, QuotationForm, QuotationItem } from "./types";
+import type { GeneratedQuotation, LoginResponse, QuotationForm, QuotationItem, User } from "./types";
 import { importantNotes } from "./constants";
 
 export const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1").trim().replace(/\/$/, "");
+const authStorageKey = "quote_system_auth";
+
+type StoredAuth = {
+  token: string;
+  user: User;
+};
 
 export function toOption(value: string): { label: string; value: string } {
   return { label: value, value };
@@ -11,6 +17,21 @@ export async function readApiErrorCode(response: Response): Promise<string> {
   try {
     const data = (await response.json()) as { detail?: { code?: string } };
     return data.detail?.code ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export async function readApiErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as { detail?: { message?: string } | string | Array<{ msg?: string; loc?: Array<string | number> }> };
+    if (typeof data.detail === "string") {
+      return data.detail;
+    }
+    if (Array.isArray(data.detail)) {
+      return data.detail.map((item) => item.msg ?? String(item.loc?.join(".") ?? "validation error")).join("；");
+    }
+    return data.detail?.message ?? "";
   } catch {
     return "";
   }
@@ -88,4 +109,79 @@ export function formatDateTime(value: string): string {
 
 export function authHeaders(token: string, email: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : { "X-User-Email": email };
+}
+
+export function readStoredAuth(): StoredAuth | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const rawValue = window.localStorage.getItem(authStorageKey);
+    if (!rawValue) {
+      return null;
+    }
+    const stored = JSON.parse(rawValue) as Partial<StoredAuth>;
+    if (!isStoredAuth(stored) || isTokenExpired(stored.token)) {
+      clearStoredAuth();
+      return null;
+    }
+    return stored;
+  } catch {
+    clearStoredAuth();
+    return null;
+  }
+}
+
+export function saveStoredAuth(auth: LoginResponse): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(authStorageKey, JSON.stringify({ token: auth.token, user: auth.user }));
+  } catch {
+    // Storage can be unavailable in private/restricted browser modes.
+  }
+}
+
+export function clearStoredAuth(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(authStorageKey);
+  } catch {
+    // Nothing else to do if the browser blocks storage access.
+  }
+}
+
+function isStoredAuth(value: Partial<StoredAuth>): value is StoredAuth {
+  return (
+    typeof value.token === "string" &&
+    value.token.length > 0 &&
+    typeof value.user?.id === "string" &&
+    typeof value.user.name === "string" &&
+    typeof value.user.email === "string" &&
+    ["consultant", "admin", "approver"].includes(value.user.role) &&
+    value.user.status === "active"
+  );
+}
+
+function isTokenExpired(token: string): boolean {
+  const expiresAt = readTokenExpiration(token);
+  return expiresAt === null || expiresAt <= Math.floor(Date.now() / 1000);
+}
+
+function readTokenExpiration(token: string): number | null {
+  try {
+    const [body] = token.split(".", 1);
+    if (!body) {
+      return null;
+    }
+    const base64 = body.replace(/-/g, "+").replace(/_/g, "/");
+    const json = window.atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "="));
+    const payload = JSON.parse(json) as { exp?: unknown };
+    return typeof payload.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
 }

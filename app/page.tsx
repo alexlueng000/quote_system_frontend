@@ -4,39 +4,86 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ApprovalPanel,
-  RulesPanel,
+  CountryConfigPanel,
   UsersPanel,
 } from "./components/admin";
 import { LoginScreen, NotesPanel, StatisticsPanel, SummaryPanel } from "./components/common";
+import { CustomersPanel } from "./components/customers";
 import { DraftWorkbench, QuotationFormView } from "./components/drafts";
+import { IpSystemsPanel } from "./components/ip-systems";
 import { QuotationDetail, QuotationList } from "./components/quotations";
+import { RulesPanel } from "./components/rules";
 import { MobileNav, Sidebar } from "./components/sidebar";
-import { fallbackBootstrap, importantNotes, initialFollowupForm, initialForm, initialUserForm } from "./constants";
+import {
+  fallbackBootstrap,
+  fallbackCountryConfig,
+  fallbackCustomers,
+  importantNotes,
+  initialCustomerContactForm,
+  initialCustomerForm,
+  initialFollowupForm,
+  initialForm,
+  initialUserForm,
+} from "./constants";
 import type {
   ActiveTab,
   ApprovalRequest,
   Bootstrap,
+  Customer,
+  CustomerContact,
+  CustomerContactForm,
+  CustomerForm,
+  Country,
+  CountryBulkFromReferenceResponse,
+  CountryConfig,
+  CountryCreate,
+  CountryPathRule,
+  CountryRuleSection,
   DraftBasicForm,
+  EntityTypeRule,
   FeeRule,
+  FxTaxRule,
   Followup,
   FollowupForm,
   GeneratedQuotation,
+  JurisdictionDataSource,
+  JurisdictionDataSourceForm,
+  JurisdictionReference,
+  JurisdictionReferenceListResponse,
+  LanguageRule,
   LoginResponse,
   Quotation,
   QuotationDraft,
   QuotationForm,
   Statistics,
+  SpecialRule,
   TranslationRule,
   User,
   UserForm,
+  WorkbenchOptions,
 } from "./types";
-import { apiBase, authHeaders, buildLocalPreview, readApiErrorCode } from "./utils";
+import {
+  apiBase,
+  authHeaders,
+  buildLocalPreview,
+  clearStoredAuth,
+  readApiErrorCode,
+  readApiErrorMessage,
+  readStoredAuth,
+  saveStoredAuth,
+} from "./utils";
 
 export default function Home() {
   const [bootstrap, setBootstrap] = useState<Bootstrap>(fallbackBootstrap);
   const [form, setForm] = useState<QuotationForm>(initialForm);
   const [generated, setGenerated] = useState<GeneratedQuotation | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(fallbackCustomers);
+  const [customerForm, setCustomerForm] = useState<CustomerForm>(initialCustomerForm);
+  const [customerContactForm, setCustomerContactForm] = useState<CustomerContactForm>(initialCustomerContactForm);
+  const [customerMessage, setCustomerMessage] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(fallbackCustomers[0]?.id ?? null);
+  const [customerKeyword, setCustomerKeyword] = useState<string>("");
   const [drafts, setDrafts] = useState<QuotationDraft[]>([]);
   const [selectedDraftItemIds, setSelectedDraftItemIds] = useState<string[]>([]);
   const [draftMessage, setDraftMessage] = useState<string>("");
@@ -45,12 +92,18 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState<string>("");
   const [loginError, setLoginError] = useState<string>("");
   const [authToken, setAuthToken] = useState<string>("");
+  const [authReady, setAuthReady] = useState<boolean>(false);
   const [connection, setConnection] = useState<"online" | "fallback">("fallback");
   const [activeTab, setActiveTab] = useState<ActiveTab>("create");
+  const [activeCountryConfigSection, setActiveCountryConfigSection] = useState<CountryRuleSection>("overview");
   const [selectedQuotationId, setSelectedQuotationId] = useState<string | null>(null);
   const [feeRules, setFeeRules] = useState<FeeRule[]>([]);
   const [translationRules, setTranslationRules] = useState<TranslationRule[]>([]);
   const [rulesMessage, setRulesMessage] = useState<string>("");
+  const [countryConfig, setCountryConfig] = useState<CountryConfig>(fallbackCountryConfig);
+  const [referenceCandidates, setReferenceCandidates] = useState<JurisdictionReference[]>([]);
+  const [jurisdictionDataSources, setJurisdictionDataSources] = useState<JurisdictionDataSource[]>([]);
+  const [countryConfigMessage, setCountryConfigMessage] = useState<string>("");
   const [users, setUsers] = useState<User[]>(fallbackBootstrap.users);
   const [userForm, setUserForm] = useState<UserForm>(initialUserForm);
   const [newPasswordByUserId, setNewPasswordByUserId] = useState<Record<string, string>>({});
@@ -63,6 +116,15 @@ export default function Home() {
   const [approvalReason, setApprovalReason] = useState<string>("需要继续为客户生成正式报价，请审批解锁。");
   const [canRequestApprovalUnlock, setCanRequestApprovalUnlock] = useState<boolean>(false);
   const [serverStatistics, setServerStatistics] = useState<Statistics | null>(null);
+  const [workbenchOptions, setWorkbenchOptions] = useState<WorkbenchOptions>({
+    country_code: "",
+    application_types: [],
+    filing_routes: [],
+    route_details: [],
+    entity_types: [],
+    quote_currency: "",
+    has_path_rules: false,
+  });
   const [quoteFilters, setQuoteFilters] = useState({
     keyword: "",
     country: "",
@@ -73,8 +135,16 @@ export default function Home() {
   });
 
   const previewPayload = useMemo<QuotationForm>(
-    () => ({ ...form, country_code: form.country_codes[0] ?? form.country_code }),
-    [form],
+    () => {
+      const countryCode = form.country_codes[0] ?? form.country_code;
+      const country = bootstrap.countries.find((item) => item.code === countryCode);
+      return {
+        ...form,
+        country_code: countryCode,
+        currency: country?.default_currency ?? form.currency,
+      };
+    },
+    [bootstrap.countries, form],
   );
 
   const statistics = useMemo<Statistics>(() => {
@@ -120,6 +190,24 @@ export default function Home() {
   }, [authToken, selectedUser]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!cancelled) {
+      const storedAuth = readStoredAuth();
+      if (storedAuth) {
+        setAuthToken(storedAuth.token);
+        setSelectedUser(storedAuth.user);
+        setLoginEmail(storedAuth.user.email);
+        updateField("consultant_email", storedAuth.user.email);
+        setActiveTab(storedAuth.user.role === "admin" ? "list" : "create");
+      }
+      setAuthReady(true);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     async function loadBootstrap(): Promise<void> {
       try {
         const response = await fetch(`${apiBase}/bootstrap`);
@@ -139,6 +227,66 @@ export default function Home() {
     }
     void loadBootstrap();
   }, []);
+
+  useEffect(() => {
+    async function loadWorkbenchOptions(): Promise<void> {
+      const countryCode = form.country_codes[0] ?? form.country_code;
+      if (!countryCode) {
+        return;
+      }
+      const params = new URLSearchParams({
+        country_code: countryCode,
+        application_type: form.application_type,
+        filing_route: form.filing_route,
+      });
+      try {
+        const response = await fetch(`${apiBase}/quotation-workbench/options?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error("workbench options failed");
+        }
+        const options = (await response.json()) as WorkbenchOptions;
+        setWorkbenchOptions(options);
+        setForm((current) => {
+          const nextApplicationType = options.application_types.includes(current.application_type)
+            ? current.application_type
+            : options.application_types[0] ?? current.application_type;
+          const nextFilingRoute = options.filing_routes.includes(current.filing_route)
+            ? current.filing_route
+            : options.filing_routes[0] ?? current.filing_route;
+          const nextRouteDetail = options.route_details.length
+            ? options.route_details.includes(current.pct_route_detail)
+              ? current.pct_route_detail
+              : options.route_details[0]
+            : "";
+          const nextEntityType = options.entity_types.length
+            ? options.entity_types.includes(current.entity_type)
+              ? current.entity_type
+              : options.entity_types[0]
+            : "";
+          return {
+            ...current,
+            application_type: nextApplicationType,
+            filing_route: nextFilingRoute,
+            pct_route_detail: nextRouteDetail,
+            entity_type: nextEntityType,
+            currency: options.quote_currency || current.currency,
+          };
+        });
+        setConnection("online");
+      } catch {
+        setWorkbenchOptions({
+          country_code: countryCode,
+          application_types: [],
+          filing_routes: [],
+          route_details: [],
+          entity_types: [],
+          quote_currency: "",
+          has_path_rules: false,
+        });
+      }
+    }
+    void loadWorkbenchOptions();
+  }, [form.application_type, form.country_code, form.country_codes, form.filing_route]);
 
   useEffect(() => {
     async function generatePreview(): Promise<void> {
@@ -193,6 +341,43 @@ export default function Home() {
   }, [activeTab, selectedUser, authToken]);
 
   useEffect(() => {
+    if (activeTab !== "country-config" || selectedUser?.role !== "admin") {
+      return;
+    }
+    async function loadCountryConfig(): Promise<void> {
+      if (!selectedUser) {
+        return;
+      }
+      try {
+        const response = await fetch(`${apiBase}/country-config?include_deleted=true`, {
+          headers: authHeaders(authToken, selectedUser.email),
+        });
+        const referenceResponse = await fetch(`${apiBase}/jurisdiction-references`, {
+          headers: authHeaders(authToken, selectedUser.email),
+        });
+        const dataSourceResponse = await fetch(`${apiBase}/jurisdiction-data-sources`, {
+          headers: authHeaders(authToken, selectedUser.email),
+        });
+        if (!response.ok || !referenceResponse.ok || !dataSourceResponse.ok) {
+          throw new Error("country config failed");
+        }
+        setCountryConfig((await response.json()) as CountryConfig);
+        const references = (await referenceResponse.json()) as JurisdictionReferenceListResponse;
+        setReferenceCandidates(references.items);
+        setJurisdictionDataSources((await dataSourceResponse.json()) as JurisdictionDataSource[]);
+        setConnection("online");
+      } catch {
+        setConnection("fallback");
+        setCountryConfig(fallbackCountryConfig);
+        setReferenceCandidates([]);
+        setJurisdictionDataSources([]);
+        setCountryConfigMessage("底层数据维护接口暂不可用，当前使用本地演示数据；reference 候选需连接 API 后加载。");
+      }
+    }
+    void loadCountryConfig();
+  }, [activeTab, selectedUser, authToken]);
+
+  useEffect(() => {
     if (activeTab !== "users" || selectedUser?.role !== "admin") {
       return;
     }
@@ -218,6 +403,34 @@ export default function Home() {
     }
     void loadUsers();
   }, [activeTab, selectedUser, authToken]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
+    async function loadCustomers(): Promise<void> {
+      if (!selectedUser) {
+        return;
+      }
+      try {
+        const response = await fetch(`${apiBase}/customers`, {
+          headers: authHeaders(authToken, selectedUser.email),
+        });
+        if (!response.ok) {
+          throw new Error("customers failed");
+        }
+        const data = (await response.json()) as { items: Customer[]; total: number };
+        setCustomers(data.items);
+        setSelectedCustomerId((current) => current ?? data.items[0]?.id ?? null);
+        setConnection("online");
+      } catch {
+        setCustomers(fallbackCustomers);
+        setSelectedCustomerId((current) => current ?? fallbackCustomers[0]?.id ?? null);
+        setConnection("fallback");
+      }
+    }
+    void loadCustomers();
+  }, [selectedUser, authToken]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -310,6 +523,8 @@ export default function Home() {
       country_codes: form.country_codes.length ? form.country_codes : [form.country_code],
       application_type: form.application_type,
       filing_route: form.filing_route,
+      pct_route_detail: form.pct_route_detail,
+      entity_type: form.entity_type,
       has_case: form.has_case,
       case_title: form.case_title,
       applicant_count: form.applicant_count,
@@ -351,10 +566,13 @@ export default function Home() {
       const nextCodes = current.country_codes.includes(code)
         ? current.country_codes.filter((item) => item !== code)
         : [...current.country_codes, code];
+      const nextPrimaryCode = nextCodes[0] ?? current.country_code;
+      const nextCountry = bootstrap.countries.find((country) => country.code === nextPrimaryCode);
       return {
         ...current,
         country_codes: nextCodes,
-        country_code: nextCodes[0] ?? current.country_code,
+        country_code: nextPrimaryCode,
+        currency: nextCountry?.default_currency ?? current.currency,
       };
     });
   }
@@ -370,6 +588,132 @@ export default function Home() {
       const nextDrafts = current.map((draft) => (draft.id === updated.id ? updated : draft));
       return nextDrafts.filter((draft) => draft.items.length > 0);
     });
+  }
+
+  function selectCustomer(customer: Customer): void {
+    setSelectedCustomerId(customer.id);
+    setCustomerForm({
+      name: customer.name,
+      customer_type: customer.customer_type,
+      consultant_email: customer.consultant_email,
+      department: customer.department,
+      default_currency: customer.default_currency,
+      default_quote_terms: customer.default_quote_terms,
+      customer_level: customer.customer_level,
+      status: customer.status,
+      remark: customer.remark,
+    });
+  }
+
+  async function createManagedCustomer(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedUser || !customerForm.name.trim()) {
+      return;
+    }
+    setCustomerMessage("");
+    try {
+      const response = await fetch(`${apiBase}/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+        body: JSON.stringify({
+          ...customerForm,
+          name: customerForm.name.trim(),
+          consultant_email: selectedUser.role === "admin" ? customerForm.consultant_email : undefined,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("customer create failed");
+      }
+      const created = (await response.json()) as Customer;
+      setCustomers((current) => [created, ...current]);
+      setSelectedCustomerId(created.id);
+      setCustomerForm({
+        ...initialCustomerForm,
+        consultant_email: selectedUser.role === "admin" ? customerForm.consultant_email : selectedUser.email,
+      });
+      setCustomerContactForm(initialCustomerContactForm);
+      setCustomerMessage(`客户已创建：${created.customer_no}`);
+      setConnection("online");
+    } catch {
+      setConnection("fallback");
+      setCustomerMessage("客户创建失败，请确认后端已启动。");
+    }
+  }
+
+  async function updateManagedCustomer(
+    event: FormEvent<HTMLFormElement>,
+    customerId: string,
+  ): Promise<void> {
+    event.preventDefault();
+    if (!selectedUser || !customerForm.name.trim()) {
+      return;
+    }
+    setCustomerMessage("");
+    try {
+      const response = await fetch(`${apiBase}/customers/${customerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+        body: JSON.stringify({
+          ...customerForm,
+          name: customerForm.name.trim(),
+          consultant_email: selectedUser.role === "admin" ? customerForm.consultant_email : undefined,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("customer update failed");
+      }
+      const updated = (await response.json()) as Customer;
+      setCustomers((current) => current.map((customer) => (customer.id === updated.id ? updated : customer)));
+      setSelectedCustomerId(updated.id);
+      setCustomerMessage("客户信息已保存。");
+      setConnection("online");
+    } catch {
+      setConnection("fallback");
+      setCustomerMessage("客户信息保存失败。");
+    }
+  }
+
+  async function createManagedCustomerContact(
+    event: FormEvent<HTMLFormElement>,
+    customerId: string,
+  ): Promise<void> {
+    event.preventDefault();
+    if (!selectedUser || !customerContactForm.name.trim()) {
+      return;
+    }
+    setCustomerMessage("");
+    try {
+      const response = await fetch(`${apiBase}/customers/${customerId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+        body: JSON.stringify({ ...customerContactForm, name: customerContactForm.name.trim() }),
+      });
+      if (!response.ok) {
+        throw new Error("contact create failed");
+      }
+      const created = (await response.json()) as CustomerContact;
+      setCustomers((current) =>
+        current.map((customer) =>
+          customer.id === customerId
+            ? {
+                ...customer,
+                contacts: [
+                  created,
+                  ...customer.contacts.map((contact) =>
+                    created.is_primary ? { ...contact, is_primary: false } : contact,
+                  ),
+                ],
+              }
+            : customer,
+        ),
+      );
+      setCustomerContactForm(initialCustomerContactForm);
+      setCustomerMessage("联系人已添加。");
+      setConnection("online");
+    } catch {
+      setConnection("fallback");
+      setCustomerMessage("联系人添加失败。");
+    }
   }
 
   async function updateDraftBasicInfo(draftId: string, values: DraftBasicForm): Promise<boolean> {
@@ -570,6 +914,12 @@ export default function Home() {
       body: JSON.stringify({
         amount: Number(rule.amount),
         currency: rule.currency,
+        quote_currency: rule.quote_currency ?? "",
+        item_group_key: rule.item_group_key ?? "",
+        fee_type: rule.fee_type,
+        fee_category: rule.fee_category ?? "",
+        trigger_condition: rule.trigger_condition ?? "",
+        tax_included: rule.tax_included ?? false,
         is_default: rule.is_default,
         is_active: rule.is_active,
         remark: rule.remark,
@@ -582,6 +932,623 @@ export default function Home() {
     const updated = (await response.json()) as FeeRule;
     setFeeRules((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     setRulesMessage("费用规则已保存，新报价会使用最新规则。");
+  }
+
+  async function createFeeRule(rule: FeeRule): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setRulesMessage("");
+    const response = await fetch(`${apiBase}/fee-rules`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify({
+        version_id: rule.version_id ?? null,
+        country_code: rule.country_code,
+        application_type: rule.application_type,
+        filing_route: rule.filing_route,
+        pct_route_detail: rule.pct_route_detail ?? "",
+        entity_type: rule.entity_type ?? "",
+        stage: rule.stage,
+        item_group_key: rule.item_group_key ?? "",
+        item_name: rule.item_name,
+        fee_type: rule.fee_type,
+        fee_category: rule.fee_category ?? "其他",
+        amount: Number(rule.amount),
+        currency: rule.currency,
+        quote_currency: rule.quote_currency ?? rule.currency,
+        is_multi_currency: rule.is_multi_currency ?? false,
+        tax_included: rule.tax_included ?? false,
+        is_default: rule.is_default,
+        is_active: rule.is_active,
+        cost_nature: rule.cost_nature,
+        trigger_condition: rule.trigger_condition ?? "",
+        remark: rule.remark,
+      }),
+    });
+    if (!response.ok) {
+      setRulesMessage("费用规则新增失败。");
+      return;
+    }
+    const created = (await response.json()) as FeeRule;
+    setFeeRules((current) => [...current, created]);
+    setRulesMessage("费用规则已新增，新报价会使用启用且默认的规则。");
+    setConnection("online");
+  }
+
+  async function deleteFeeRule(ruleId: string): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setRulesMessage("");
+    const response = await fetch(`${apiBase}/fee-rules/${ruleId}`, {
+      method: "DELETE",
+      headers: authHeaders(authToken, selectedUser.email),
+    });
+    if (!response.ok) {
+      setRulesMessage("费用规则删除失败。");
+      return;
+    }
+    setFeeRules((current) => current.filter((rule) => rule.id !== ruleId));
+    setRulesMessage("费用规则已删除。");
+    setConnection("online");
+  }
+
+  async function saveCountryConfigRow(country: Country): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}/countries/${country.code}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify({
+        name_cn: country.name_cn,
+        name_en: country.name_en,
+        display_code: country.display_code ?? country.code,
+        enabled: country.enabled,
+        business_region: country.business_region ?? [],
+        region_remark: country.region_remark ?? "",
+        is_enabled: country.is_enabled ?? country.enabled,
+        manual_override: country.manual_override ?? false,
+        remarks: country.remarks ?? "",
+      }),
+    });
+    if (!response.ok) {
+      setCountryConfigMessage("国家/地区/受理局主档保存失败。");
+      return;
+    }
+    const updated = (await response.json()) as Country;
+    setCountryConfig((current) => ({
+      ...current,
+      countries: current.countries.map((item) => (item.code === updated.code ? updated : item)),
+    }));
+    setCountryConfigMessage("国家/地区/受理局主档已保存。");
+    setConnection("online");
+  }
+
+  async function createCountryConfigRow(country: CountryCreate): Promise<boolean> {
+    if (!selectedUser) {
+      return false;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}/countries`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify({
+        ...country,
+        // Legacy compatibility only. Currency rules belong in the FX/tax module.
+        default_currency: "USD",
+        internal_code: country.internal_code || country.code,
+        display_code: country.display_code || country.code,
+        is_enabled: country.enabled,
+      }),
+    });
+    if (!response.ok) {
+      const code = await readApiErrorCode(response);
+      setCountryConfigMessage(code === "COUNTRY_EXISTS" ? "国家/地区/受理局已存在。" : "国家/地区/受理局新增失败。");
+      return false;
+    }
+    const created = (await response.json()) as Country;
+    setCountryConfig((current) => ({
+      ...current,
+      countries: [...current.countries, created].sort((left, right) => (left.display_order ?? 0) - (right.display_order ?? 0) || left.code.localeCompare(right.code)),
+    }));
+    setCountryConfigMessage("国家/地区/受理局已新增。");
+    setConnection("online");
+    return true;
+  }
+
+  async function bulkCreateCountriesFromReference(referenceIds: string[]): Promise<CountryBulkFromReferenceResponse> {
+    if (!selectedUser) {
+      throw new Error("请先登录管理员账号。");
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}/countries/bulk-from-reference`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify({
+        reference_ids: referenceIds,
+        source_verified: true,
+        source_verified_by: selectedUser.email || "local_admin",
+        batch_note: "从本地 reference 批量添加",
+      }),
+    });
+    if (!response.ok) {
+      const message = await readApiErrorMessage(response);
+      throw new Error(message || "从 reference 批量新增/恢复失败。");
+    }
+    const result = (await response.json()) as CountryBulkFromReferenceResponse;
+    const createdItems = result.created_items ?? result.added ?? [];
+    const restoredItems = result.restored_items ?? result.restored ?? [];
+    const changedCountries = [...createdItems, ...restoredItems].map((item) => item.country).filter((country): country is Country => Boolean(country));
+    if (changedCountries.length) {
+      setCountryConfig((current) => {
+        const byCode = new Map(current.countries.map((country) => [country.code, country]));
+        for (const country of changedCountries) {
+          byCode.set(country.code, country);
+        }
+        return {
+          ...current,
+          countries: Array.from(byCode.values()).sort((left, right) => (left.display_order ?? 0) - (right.display_order ?? 0) || left.code.localeCompare(right.code)),
+        };
+      });
+    }
+    const createdCount = result.created_count ?? result.added_count;
+    const restoredCount = result.restored_count ?? 0;
+    if (createdCount === 0 && restoredCount === 0 && result.skipped_count > 0 && result.failed_count === 0) {
+      setCountryConfigMessage("所选对象均已存在，无需新增。");
+    } else {
+      setCountryConfigMessage(`本次新增 ${createdCount} 条，恢复 ${restoredCount} 条，跳过 ${result.skipped_count} 条，失败 ${result.failed_count} 条。`);
+    }
+    setConnection("online");
+    return result;
+  }
+
+  async function saveJurisdictionDataSource(source: JurisdictionDataSourceForm): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setCountryConfigMessage("");
+    const existing = jurisdictionDataSources.some((item) => item.source_id === source.source_id);
+    const normalizedSource = {
+      ...source,
+      last_reviewed_at: normalizeDateTimeForApi(source.last_reviewed_at),
+      next_review_due_at: normalizeDateTimeForApi(source.next_review_due_at),
+    };
+    const response = await fetch(`${apiBase}/jurisdiction-data-sources${existing ? `/${encodeURIComponent(source.source_id)}` : ""}`, {
+      method: existing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify(normalizedSource),
+    });
+    if (!response.ok) {
+      setCountryConfigMessage("来源 registry 保存失败。");
+      return;
+    }
+    const saved = (await response.json()) as JurisdictionDataSource;
+    setJurisdictionDataSources((current) => {
+      const byId = new Map(current.map((item) => [item.source_id, item]));
+      byId.set(saved.source_id, saved);
+      return [...byId.values()].sort((left, right) => left.source_id.localeCompare(right.source_id));
+    });
+    setCountryConfigMessage("来源 registry 已保存。");
+    setConnection("online");
+  }
+
+  function normalizeDateTimeForApi(value?: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+    return value.includes("T") ? value : `${value}T00:00:00`;
+  }
+
+  async function deleteCountryConfigRow(country: Country, deleteReason: string): Promise<boolean> {
+    if (!selectedUser) {
+      return false;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}/countries/${country.code}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify({ delete_reason: deleteReason }),
+    });
+    if (!response.ok) {
+      const message = await readApiErrorMessage(response);
+      setCountryConfigMessage(message || "国家/地区/受理局删除失败。");
+      return false;
+    }
+    setCountryConfig((current) => ({
+      ...current,
+      countries: current.countries.map((item) =>
+        item.code === country.code
+          ? { ...item, enabled: false, is_enabled: false, is_deleted: true, delete_reason: deleteReason }
+          : item,
+      ),
+    }));
+    setCountryConfigMessage("国家/地区/受理局已软删除。");
+    setConnection("online");
+    return true;
+  }
+
+  async function restoreCountryConfigRow(country: Country): Promise<boolean> {
+    if (!selectedUser) {
+      return false;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}/countries/${country.code}/restore`, {
+      method: "PATCH",
+      headers: authHeaders(authToken, selectedUser.email),
+    });
+    if (!response.ok) {
+      const message = await readApiErrorMessage(response);
+      setCountryConfigMessage(message || "国家/地区/受理局恢复失败。");
+      return false;
+    }
+    const restored = (await response.json()) as Country;
+    setCountryConfig((current) => ({
+      ...current,
+      countries: current.countries.map((item) => (item.code === restored.code ? restored : item)),
+    }));
+    setCountryConfigMessage("国家/地区/受理局已恢复。");
+    setConnection("online");
+    return true;
+  }
+
+  async function saveCountryPathConfig(rule: CountryPathRule): Promise<void> {
+    await saveCountryConfigResource<CountryPathRule>(
+      `/country-path-rules/${rule.id}`,
+      {
+        route_detail: rule.route_detail,
+        affects_official_fee: rule.affects_official_fee,
+        affects_local_service_fee: rule.affects_local_service_fee,
+        affects_inhouse_service_fee: rule.affects_inhouse_service_fee,
+        affects_questions: rule.affects_questions,
+        affects_documents: rule.affects_documents,
+        affects_deadlines: rule.affects_deadlines,
+        affects_translation: rule.affects_translation,
+        affects_display: rule.affects_display,
+        enabled: rule.enabled,
+        effective_date: rule.effective_date,
+        remark: rule.remark,
+      },
+      (current, updated) => ({
+        ...current,
+        path_rules: current.path_rules.map((item) => (item.id === updated.id ? updated : item)),
+      }),
+      "路径矩阵已保存。",
+      "路径矩阵保存失败。",
+    );
+  }
+
+  async function saveEntityTypeConfig(rule: EntityTypeRule): Promise<void> {
+    await saveCountryConfigResource<EntityTypeRule>(
+      `/entity-type-rules/${rule.id}`,
+      {
+        enabled: rule.enabled,
+        entity_types: rule.entity_types,
+        affects_official_fee: rule.affects_official_fee,
+        affects_questions: rule.affects_questions,
+        requires_customer_confirmation: rule.requires_customer_confirmation,
+        requires_supporting_documents: rule.requires_supporting_documents,
+        remark: rule.remark,
+      },
+      (current, updated) => ({
+        ...current,
+        entity_type_rules: current.entity_type_rules.map((item) => (item.id === updated.id ? updated : item)),
+      }),
+      "实体类型规则已保存。",
+      "实体类型规则保存失败。",
+    );
+  }
+
+  async function saveLanguageConfig(rule: LanguageRule): Promise<void> {
+    await saveCountryConfigResource<LanguageRule>(
+      `/language-rules/${rule.id}`,
+      {
+        accepted_languages: rule.accepted_languages,
+        source_language: rule.source_language,
+        target_language: rule.target_language,
+        intermediate_language: rule.intermediate_language,
+        needs_second_translation: rule.needs_second_translation,
+        recommended_scheme_id: rule.recommended_scheme_id,
+        default_translation_fee: rule.default_translation_fee,
+        allow_scheme_switch: rule.allow_scheme_switch,
+        enabled: rule.enabled,
+        remark: rule.remark,
+      },
+      (current, updated) => ({
+        ...current,
+        language_rules: current.language_rules.map((item) => (item.id === updated.id ? updated : item)),
+      }),
+      "语言与翻译路径已保存。",
+      "语言与翻译路径保存失败。",
+    );
+  }
+
+  async function saveFxTaxConfig(rule: FxTaxRule): Promise<void> {
+    await saveCountryConfigResource<FxTaxRule>(
+      `/fx-tax-rules/${rule.id}`,
+      {
+        official_currency: rule.official_currency,
+        official_quote_currency: rule.official_quote_currency,
+        local_service_currency: rule.local_service_currency,
+        local_service_currency_options: rule.local_service_currency_options,
+        quote_currency: rule.quote_currency,
+        fx_rate: Number(rule.fx_rate),
+        tax_rate: Number(rule.tax_rate),
+        tax_included: rule.tax_included,
+        lock_on_formal_quote: rule.lock_on_formal_quote,
+        version: rule.version,
+        enabled: rule.enabled,
+        remark: rule.remark,
+      },
+      (current, updated) => ({
+        ...current,
+        fx_tax_rules: current.fx_tax_rules.map((item) => (item.id === updated.id ? updated : item)),
+      }),
+      "汇率税率规则已保存。",
+      "汇率税率规则保存失败。",
+    );
+  }
+
+  async function saveSpecialConfig(rule: SpecialRule): Promise<void> {
+    await saveCountryConfigResource<SpecialRule>(
+      `/special-rules/${rule.id}`,
+      {
+        enabled: rule.enabled,
+        triggers_extra_fee: rule.triggers_extra_fee,
+        triggers_risk_warning: rule.triggers_risk_warning,
+        requires_customer_confirmation: rule.requires_customer_confirmation,
+        risk_summary: rule.risk_summary,
+        linked_rule_code: rule.linked_rule_code,
+        remark: rule.remark,
+      },
+      (current, updated) => ({
+        ...current,
+        special_rules: current.special_rules.map((item) => (item.id === updated.id ? updated : item)),
+      }),
+      "非常规事项规则已保存。",
+      "非常规事项规则保存失败。",
+    );
+  }
+
+  async function createCountryPathConfig(rule: CountryPathRule): Promise<void> {
+    await createCountryConfigResource<CountryPathRule>(
+      "/country-path-rules",
+      {
+        country_code: rule.country_code,
+        application_type: rule.application_type,
+        filing_route: rule.filing_route,
+        route_detail: rule.route_detail,
+        affects_official_fee: rule.affects_official_fee,
+        affects_local_service_fee: rule.affects_local_service_fee,
+        affects_inhouse_service_fee: rule.affects_inhouse_service_fee,
+        affects_questions: rule.affects_questions,
+        affects_documents: rule.affects_documents,
+        affects_deadlines: rule.affects_deadlines,
+        affects_translation: rule.affects_translation,
+        affects_display: rule.affects_display,
+        enabled: rule.enabled,
+        effective_date: rule.effective_date,
+        remark: rule.remark,
+      },
+      (current, created) => ({ ...current, path_rules: [...current.path_rules, created] }),
+      "路径矩阵已新增。",
+      "路径矩阵新增失败。",
+    );
+  }
+
+  async function createEntityTypeConfig(rule: EntityTypeRule): Promise<void> {
+    await createCountryConfigResource<EntityTypeRule>(
+      "/entity-type-rules",
+      {
+        country_code: rule.country_code,
+        application_type: rule.application_type,
+        filing_route: rule.filing_route,
+        enabled: rule.enabled,
+        entity_types: rule.entity_types,
+        affects_official_fee: rule.affects_official_fee,
+        affects_questions: rule.affects_questions,
+        requires_customer_confirmation: rule.requires_customer_confirmation,
+        requires_supporting_documents: rule.requires_supporting_documents,
+        remark: rule.remark,
+      },
+      (current, created) => ({ ...current, entity_type_rules: [...current.entity_type_rules, created] }),
+      "实体类型规则已新增。",
+      "实体类型规则新增失败。",
+    );
+  }
+
+  async function createLanguageConfig(rule: LanguageRule): Promise<void> {
+    await createCountryConfigResource<LanguageRule>(
+      "/language-rules",
+      {
+        country_code: rule.country_code,
+        application_type: rule.application_type,
+        accepted_languages: rule.accepted_languages,
+        source_language: rule.source_language,
+        target_language: rule.target_language,
+        intermediate_language: rule.intermediate_language,
+        needs_second_translation: rule.needs_second_translation,
+        recommended_scheme_id: rule.recommended_scheme_id,
+        default_translation_fee: rule.default_translation_fee,
+        allow_scheme_switch: rule.allow_scheme_switch,
+        enabled: rule.enabled,
+        remark: rule.remark,
+      },
+      (current, created) => ({ ...current, language_rules: [...current.language_rules, created] }),
+      "语言与翻译路径已新增。",
+      "语言与翻译路径新增失败。",
+    );
+  }
+
+  async function createFxTaxConfig(rule: FxTaxRule): Promise<void> {
+    await createCountryConfigResource<FxTaxRule>(
+      "/fx-tax-rules",
+      {
+        country_code: rule.country_code,
+        official_currency: rule.official_currency,
+        official_quote_currency: rule.official_quote_currency,
+        local_service_currency: rule.local_service_currency,
+        local_service_currency_options: rule.local_service_currency_options,
+        quote_currency: rule.quote_currency,
+        fx_rate: Number(rule.fx_rate),
+        tax_rate: Number(rule.tax_rate),
+        tax_included: rule.tax_included,
+        lock_on_formal_quote: rule.lock_on_formal_quote,
+        version: rule.version,
+        enabled: rule.enabled,
+        remark: rule.remark,
+      },
+      (current, created) => ({ ...current, fx_tax_rules: [...current.fx_tax_rules, created] }),
+      "汇率税率规则已新增。",
+      "汇率税率规则新增失败。",
+    );
+  }
+
+  async function createSpecialConfig(rule: SpecialRule): Promise<void> {
+    await createCountryConfigResource<SpecialRule>(
+      "/special-rules",
+      {
+        country_code: rule.country_code,
+        application_type: rule.application_type,
+        filing_route: rule.filing_route,
+        rule_type: rule.rule_type,
+        enabled: rule.enabled,
+        triggers_extra_fee: rule.triggers_extra_fee,
+        triggers_risk_warning: rule.triggers_risk_warning,
+        requires_customer_confirmation: rule.requires_customer_confirmation,
+        risk_summary: rule.risk_summary,
+        linked_rule_code: rule.linked_rule_code,
+        remark: rule.remark,
+      },
+      (current, created) => ({ ...current, special_rules: [...current.special_rules, created] }),
+      "非常规事项规则已新增。",
+      "非常规事项规则新增失败。",
+    );
+  }
+
+  async function deleteCountryPathConfig(ruleId: string): Promise<void> {
+    await deleteCountryConfigResource(
+      `/country-path-rules/${ruleId}`,
+      (current) => ({ ...current, path_rules: current.path_rules.filter((rule) => rule.id !== ruleId) }),
+      "路径矩阵已删除。",
+      "路径矩阵删除失败。",
+    );
+  }
+
+  async function deleteEntityTypeConfig(ruleId: string): Promise<void> {
+    await deleteCountryConfigResource(
+      `/entity-type-rules/${ruleId}`,
+      (current) => ({
+        ...current,
+        entity_type_rules: current.entity_type_rules.filter((rule) => rule.id !== ruleId),
+      }),
+      "实体类型规则已删除。",
+      "实体类型规则删除失败。",
+    );
+  }
+
+  async function deleteLanguageConfig(ruleId: string): Promise<void> {
+    await deleteCountryConfigResource(
+      `/language-rules/${ruleId}`,
+      (current) => ({ ...current, language_rules: current.language_rules.filter((rule) => rule.id !== ruleId) }),
+      "语言与翻译路径已删除。",
+      "语言与翻译路径删除失败。",
+    );
+  }
+
+  async function deleteFxTaxConfig(ruleId: string): Promise<void> {
+    await deleteCountryConfigResource(
+      `/fx-tax-rules/${ruleId}`,
+      (current) => ({ ...current, fx_tax_rules: current.fx_tax_rules.filter((rule) => rule.id !== ruleId) }),
+      "汇率税率规则已删除。",
+      "汇率税率规则删除失败。",
+    );
+  }
+
+  async function deleteSpecialConfig(ruleId: string): Promise<void> {
+    await deleteCountryConfigResource(
+      `/special-rules/${ruleId}`,
+      (current) => ({ ...current, special_rules: current.special_rules.filter((rule) => rule.id !== ruleId) }),
+      "非常规事项规则已删除。",
+      "非常规事项规则删除失败。",
+    );
+  }
+
+  async function deleteCountryConfigResource(
+    path: string,
+    applyDeleted: (current: CountryConfig) => CountryConfig,
+    successMessage: string,
+    failureMessage: string,
+  ): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}${path}`, {
+      method: "DELETE",
+      headers: authHeaders(authToken, selectedUser.email),
+    });
+    if (!response.ok) {
+      setCountryConfigMessage(failureMessage);
+      return;
+    }
+    setCountryConfig((current) => applyDeleted(current));
+    setCountryConfigMessage(successMessage);
+    setConnection("online");
+  }
+
+  async function createCountryConfigResource<T extends { id: string }>(
+    path: string,
+    payload: Record<string, unknown>,
+    applyCreated: (current: CountryConfig, created: T) => CountryConfig,
+    successMessage: string,
+    failureMessage: string,
+  ): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      setCountryConfigMessage(failureMessage);
+      return;
+    }
+    const created = (await response.json()) as T;
+    setCountryConfig((current) => applyCreated(current, created));
+    setCountryConfigMessage(successMessage);
+    setConnection("online");
+  }
+
+  async function saveCountryConfigResource<T extends { id: string }>(
+    path: string,
+    payload: Record<string, unknown>,
+    applyUpdated: (current: CountryConfig, updated: T) => CountryConfig,
+    successMessage: string,
+    failureMessage: string,
+  ): Promise<void> {
+    if (!selectedUser) {
+      return;
+    }
+    setCountryConfigMessage("");
+    const response = await fetch(`${apiBase}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      setCountryConfigMessage(failureMessage);
+      return;
+    }
+    const updated = (await response.json()) as T;
+    setCountryConfig((current) => applyUpdated(current, updated));
+    setCountryConfigMessage(successMessage);
+    setConnection("online");
   }
 
   async function saveTranslationRule(rule: TranslationRule): Promise<void> {
@@ -780,6 +1747,7 @@ export default function Home() {
   }
 
   function logout(): void {
+    clearStoredAuth();
     setSelectedUser(null);
     setAuthToken("");
     setLoginPassword("");
@@ -813,6 +1781,10 @@ export default function Home() {
     void loadFollowups();
   }, [selectedUser, selectedQuotation, authToken, followupsByQuotationId]);
 
+  if (!authReady) {
+    return <main className="min-h-screen bg-[oklch(97%_0.012_178)]" />;
+  }
+
   if (!selectedUser) {
     return (
       <LoginScreen
@@ -834,6 +1806,7 @@ export default function Home() {
               throw new Error("login failed");
             }
             const data = (await response.json()) as LoginResponse;
+            saveStoredAuth(data);
             setAuthToken(data.token);
             setSelectedUser(data.user);
             updateField("consultant_email", data.user.email);
@@ -852,7 +1825,9 @@ export default function Home() {
         <Sidebar
           activeTab={activeTab}
           user={selectedUser}
+          activeCountryConfigSection={activeCountryConfigSection}
           setActiveTab={setActiveTab}
+          setCountryConfigSection={setActiveCountryConfigSection}
           openApprovalsTab={openApprovalsTab}
           logout={logout}
         />
@@ -862,7 +1837,7 @@ export default function Home() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <p className="text-sm text-[oklch(44%_0.045_178)]">内部报价工作台</p>
-                <h2 className="mt-1 text-3xl font-semibold tracking-normal">标准规则生成报价，记录后续跟进</h2>
+                <h2 className="mt-1 text-3xl font-semibold tracking-normal">标准化报价生成与客户跟进管理</h2>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`rounded-md px-3 py-2 text-sm font-medium ${connection === "online" ? "bg-[oklch(88%_0.08_155)] text-[oklch(30%_0.09_155)]" : "bg-[oklch(91%_0.045_75)] text-[oklch(42%_0.08_75)]"}`}>
@@ -876,7 +1851,9 @@ export default function Home() {
             <MobileNav
               activeTab={activeTab}
               user={selectedUser}
+              activeCountryConfigSection={activeCountryConfigSection}
               setActiveTab={setActiveTab}
+              setCountryConfigSection={setActiveCountryConfigSection}
               openApprovalsTab={openApprovalsTab}
             />
           </header>
@@ -888,6 +1865,7 @@ export default function Home() {
                   bootstrap={bootstrap}
                   form={form}
                   generated={generated}
+                  workbenchOptions={workbenchOptions}
                   onSubmit={handleSubmit}
                   updateField={updateField}
                   toggleCountry={toggleCountry}
@@ -909,6 +1887,25 @@ export default function Home() {
                   setApprovalReason={setApprovalReason}
                   requestApprovalUnlock={requestApprovalUnlock}
                   message={draftMessage}
+                />
+              ) : null}
+              {activeTab === "customers" ? (
+                <CustomersPanel
+                  customers={customers}
+                  users={users}
+                  currentUser={selectedUser}
+                  form={customerForm}
+                  contactForm={customerContactForm}
+                  message={customerMessage}
+                  selectedCustomerId={selectedCustomerId}
+                  keyword={customerKeyword}
+                  setKeyword={setCustomerKeyword}
+                  setForm={setCustomerForm}
+                  setContactForm={setCustomerContactForm}
+                  selectCustomer={selectCustomer}
+                  createCustomer={createManagedCustomer}
+                  updateCustomer={updateManagedCustomer}
+                  createContact={createManagedCustomerContact}
                 />
               ) : null}
               {activeTab === "list" ? (
@@ -937,6 +1934,44 @@ export default function Home() {
                   review={reviewApprovalRequest}
                 />
               ) : null}
+              {activeTab === "country-config" && activeCountryConfigSection === "treaty" && ["admin", "approver"].includes(selectedUser.role) ? (
+                <IpSystemsPanel
+                  currentUser={selectedUser}
+                  authToken={authToken}
+                  countries={selectedUser.role === "admin" ? countryConfig.countries : bootstrap.countries}
+                />
+              ) : null}
+              {activeTab === "country-config" && activeCountryConfigSection !== "treaty" && selectedUser.role === "admin" ? (
+                <CountryConfigPanel
+                  config={countryConfig}
+                  message={countryConfigMessage}
+                  activeSection={activeCountryConfigSection}
+                  referenceCandidates={referenceCandidates}
+                  dataSources={jurisdictionDataSources}
+                  setConfig={setCountryConfig}
+                  createCountry={createCountryConfigRow}
+                  bulkCreateCountries={bulkCreateCountriesFromReference}
+                  saveDataSource={saveJurisdictionDataSource}
+                  saveCountry={saveCountryConfigRow}
+                  deleteCountry={deleteCountryConfigRow}
+                  restoreCountry={restoreCountryConfigRow}
+                  savePathRule={saveCountryPathConfig}
+                  saveEntityTypeRule={saveEntityTypeConfig}
+                  saveLanguageRule={saveLanguageConfig}
+                  saveFxTaxRule={saveFxTaxConfig}
+                  saveSpecialRule={saveSpecialConfig}
+                  createPathRule={createCountryPathConfig}
+                  createEntityTypeRule={createEntityTypeConfig}
+                  createLanguageRule={createLanguageConfig}
+                  createFxTaxRule={createFxTaxConfig}
+                  createSpecialRule={createSpecialConfig}
+                  deletePathRule={deleteCountryPathConfig}
+                  deleteEntityTypeRule={deleteEntityTypeConfig}
+                  deleteLanguageRule={deleteLanguageConfig}
+                  deleteFxTaxRule={deleteFxTaxConfig}
+                  deleteSpecialRule={deleteSpecialConfig}
+                />
+              ) : null}
               {activeTab === "rules" && selectedUser.role === "admin" ? (
                 <RulesPanel
                   feeRules={feeRules}
@@ -945,6 +1980,8 @@ export default function Home() {
                   setFeeRules={setFeeRules}
                   setTranslationRules={setTranslationRules}
                   saveFeeRule={saveFeeRule}
+                  createFeeRule={createFeeRule}
+                  deleteFeeRule={deleteFeeRule}
                   saveTranslationRule={saveTranslationRule}
                 />
               ) : null}

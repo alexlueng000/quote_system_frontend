@@ -3,13 +3,14 @@
 import { FormEvent, Fragment, useState } from "react";
 
 import { NumberInput, SelectInput, TextInput } from "./common";
-import type { Bootstrap, DraftBasicForm, GeneratedQuotation, QuotationDraft, QuotationDraftItem, QuotationForm, User } from "../types";
+import type { Bootstrap, DraftBasicForm, GeneratedQuotation, QuotationDraft, QuotationDraftItem, QuotationForm, User, WorkbenchOptions } from "../types";
 import { formatMoney, toOption } from "../utils";
 
 export function QuotationFormView({
   bootstrap,
   form,
   generated,
+  workbenchOptions,
   onSubmit,
   updateField,
   toggleCountry,
@@ -20,6 +21,7 @@ export function QuotationFormView({
   bootstrap: Bootstrap;
   form: QuotationForm;
   generated: GeneratedQuotation | null;
+  workbenchOptions: WorkbenchOptions;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   updateField: <K extends keyof QuotationForm>(key: K, value: QuotationForm[K]) => void;
   toggleCountry: (code: string) => void;
@@ -27,6 +29,13 @@ export function QuotationFormView({
   isAdmin: boolean;
   users: User[];
 }) {
+  const applicationOptions = workbenchOptions.application_types.length
+    ? workbenchOptions.application_types
+    : bootstrap.application_types;
+  const filingRouteOptions = workbenchOptions.filing_routes.length
+    ? workbenchOptions.filing_routes
+    : bootstrap.filing_routes;
+
   return (
     <form className="space-y-6" onSubmit={onSubmit}>
       <section className="rounded-lg border border-[oklch(82%_0.026_178)] bg-[oklch(99%_0.006_178)] p-5">
@@ -52,8 +61,14 @@ export function QuotationFormView({
               onChange={(value) => updateField("consultant_email", value)}
             />
           ) : null}
-          <SelectInput label="申请类型" value={form.application_type} options={bootstrap.application_types.map(toOption)} onChange={(value) => updateField("application_type", value)} />
-          <SelectInput label="申请途径" value={form.filing_route} options={bootstrap.filing_routes.map(toOption)} onChange={(value) => updateField("filing_route", value)} />
+          <SelectInput label="申请类型" value={form.application_type} options={applicationOptions.map(toOption)} onChange={(value) => updateField("application_type", value)} />
+          <SelectInput label="申请途径" value={form.filing_route} options={filingRouteOptions.map(toOption)} onChange={(value) => updateField("filing_route", value)} />
+          {workbenchOptions.route_details.length ? (
+            <SelectInput label="路径细分" value={form.pct_route_detail} options={workbenchOptions.route_details.map(toOption)} onChange={(value) => updateField("pct_route_detail", value)} />
+          ) : null}
+          {workbenchOptions.entity_types.length ? (
+            <SelectInput label="实体类型" value={form.entity_type} options={workbenchOptions.entity_types.map(toOption)} onChange={(value) => updateField("entity_type", value)} />
+          ) : null}
           <NumberInput label="申请人数量" value={form.applicant_count} onChange={(value) => updateField("applicant_count", value)} />
           <NumberInput label="优先权数量" value={form.priority_count} onChange={(value) => updateField("priority_count", value)} />
           <NumberInput label="权利要求项数" value={form.claim_count} onChange={(value) => updateField("claim_count", value)} />
@@ -310,7 +325,14 @@ export function DraftWorkbench({
                       <div className="mt-1 text-xs text-[oklch(48%_0.045_178)]">{draft.consultant_name}</div>
                     </td>
                     <td className="px-4 py-3 font-medium">{item.country_code}</td>
-                    <td className="px-4 py-3">{item.application_type} / {item.filing_route}</td>
+                    <td className="px-4 py-3">
+                      <div>{item.application_type} / {item.filing_route}</div>
+                      {item.pct_route_detail || item.entity_type ? (
+                        <div className="mt-1 text-xs text-[oklch(48%_0.045_178)]">
+                          {[item.pct_route_detail, item.entity_type].filter(Boolean).join(" / ")}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono">{formatMoney(item.current_stage_total, item.quote_currency)}</td>
                     <td className="px-4 py-3 text-right font-mono">{formatMoney(item.future_stage_total, item.quote_currency)}</td>
                     <td className="px-4 py-3">{item.status}</td>
