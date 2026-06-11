@@ -8,8 +8,8 @@ export type BusinessTagOption = SelectOption & {
 };
 
 export const jurisdictionTypeOptions: SelectOption[] = [
-  { label: "单一国家", value: "single_country" },
-  { label: "特殊地区", value: "special_region" },
+  { label: "单一国家/地区", value: "single_country" },
+  { label: "单一国家/地区", value: "special_region" },
   { label: "区域局", value: "regional_office" },
   { label: "国际组织", value: "international_organization" },
   { label: "条约体系入口", value: "treaty_entry" },
@@ -26,18 +26,22 @@ export const geoRegionOptions: SelectOption[] = [
   { label: "欧洲", value: "Europe" },
   { label: "非洲", value: "Africa" },
   { label: "大洋洲", value: "Oceania" },
-  { label: "北美洲", value: "North America" },
-  { label: "南美洲", value: "South America" },
-  { label: "拉丁美洲和加勒比", value: "Latin America and the Caribbean" },
+  { label: "北美", value: "North America" },
+  { label: "拉美", value: "Latin America and the Caribbean" },
   { label: "中东", value: "Middle East" },
-  { label: "其他 / 待确认", value: "Other" },
+  { label: "其他", value: "Other" },
+];
+
+export const officeTypeOptions: SelectOption[] = [
+  { label: "国家/地区主管局", value: "national_ip_office" },
+  { label: "区域局", value: "regional_office" },
+  { label: "国际局/国际组织", value: "international_office" },
 ];
 
 export const businessRegionOptions: SelectOption[] = [
   { label: "欧洲", value: "EUROPE" },
   { label: "北美", value: "NORTH_AMERICA" },
   { label: "拉美", value: "LATIN_AMERICA" },
-  { label: "南美", value: "SOUTH_AMERICA" },
   { label: "东南亚", value: "SOUTHEAST_ASIA" },
   { label: "日韩", value: "NORTHEAST_ASIA_JP_KR" },
   { label: "大中华 / 港澳台", value: "GREATER_CHINA" },

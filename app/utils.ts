@@ -108,7 +108,7 @@ export function formatDateTime(value: string): string {
 }
 
 export function authHeaders(token: string, email: string): Record<string, string> {
-  return token ? { Authorization: `Bearer ${token}` } : { "X-User-Email": email };
+  return token ? { Authorization: `Bearer ${token}`, "X-User-Email": email } : { "X-User-Email": email };
 }
 
 export function readStoredAuth(): StoredAuth | null {

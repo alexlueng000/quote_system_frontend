@@ -30,7 +30,6 @@ export type ActiveTab =
 export type CountryRuleSection =
   | "overview"
   | "countries"
-  | "region-sources"
   | "treaty"
   | "path"
   | "deadline"
@@ -80,6 +79,12 @@ export type Country = {
   deleted_at?: string | null;
   deleted_by?: string | null;
   delete_reason?: string | null;
+  default_office_jurisdiction_id?: string | null;
+  default_office_code?: string;
+  default_office_name_cn?: string;
+  default_office_name_en?: string;
+  default_office_type?: string;
+  default_office_source_note?: string;
 };
 
 export type CountryCreate = {
@@ -89,17 +94,31 @@ export type CountryCreate = {
   name_en: string;
   enabled: boolean;
   display_order?: number;
+  international_region?: string;
   business_region: string[];
   region_remark: string;
   internal_code: string;
   display_code: string;
+  jurisdiction_type?: string;
   standard_code?: string;
   is_enabled: boolean;
+  source_name?: string;
+  source_url?: string;
+  source_version?: string;
   source_note?: string;
   source_verified: boolean;
+  source_verified_at?: string | null;
+  source_verified_by?: string | null;
   last_verified_at: string | null;
+  review_status?: "pending_review" | "verified" | "needs_update" | "deprecated" | string;
   manual_override: boolean;
   remarks: string;
+  default_office_jurisdiction_id?: string | null;
+  default_office_code?: string;
+  default_office_name_cn?: string;
+  default_office_name_en?: string;
+  default_office_type?: string;
+  default_office_source_note?: string;
 };
 
 export type CountryBulkFromReferenceResult = {
@@ -128,6 +147,23 @@ export type CountryBulkFromReferenceResponse = {
   restored?: CountryBulkFromReferenceResult[];
   skipped: CountryBulkFromReferenceResult[];
   failed: CountryBulkFromReferenceResult[];
+};
+
+export type CountryBulkFromReferenceStagingItem = {
+  reference_id: string;
+  name_cn: string;
+  name_en: string;
+  display_code: string;
+  jurisdiction_type?: string;
+  international_region: string;
+  business_region: string[];
+  default_office_name_cn: string;
+  default_office_name_en: string;
+  default_office_code: string;
+  default_office_type: string;
+  remarks: string;
+  overwrite_existing_fields?: boolean;
+  review_status?: "pending_review" | "verified" | "needs_update" | "deprecated" | string;
 };
 
 export type JurisdictionReference = {
@@ -161,6 +197,11 @@ export type JurisdictionReference = {
   review_status: string;
   is_active: boolean;
   default_currency_legacy: string;
+  default_office_code?: string;
+  default_office_name_cn?: string;
+  default_office_name_en?: string;
+  default_office_type?: string;
+  default_office_source_note?: string;
 };
 
 export type JurisdictionReferenceListResponse = {

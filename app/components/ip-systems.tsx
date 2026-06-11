@@ -111,6 +111,7 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
   const [showSystemsList, setShowSystemsList] = useState(true);
   const [showMemberDetail, setShowMemberDetail] = useState(true);
   const [showCheckResult, setShowCheckResult] = useState(false);
+  const [activeQueryMode, setActiveQueryMode] = useState<"system" | "jurisdiction">("system");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const diffPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -483,7 +484,25 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
         />
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
+      <div className="flex flex-wrap gap-2">
+        <button
+          className={`h-8 rounded-md px-3 text-xs font-semibold ${activeQueryMode === "system" ? "bg-[oklch(35%_0.09_178)] text-white" : "border border-[oklch(72%_0.045_178)] bg-white"}`}
+          type="button"
+          onClick={() => setActiveQueryMode("system")}
+        >
+          按条约/体系查询
+        </button>
+        <button
+          className={`h-8 rounded-md px-3 text-xs font-semibold ${activeQueryMode === "jurisdiction" ? "bg-[oklch(35%_0.09_178)] text-white" : "border border-[oklch(72%_0.045_178)] bg-white"}`}
+          type="button"
+          onClick={() => setActiveQueryMode("jurisdiction")}
+        >
+          按国家/地区查询
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {activeQueryMode === "system" ? (
         <section className="border border-[oklch(82%_0.026_178)] bg-[oklch(99%_0.006_178)] px-3 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-base font-semibold">已录入条约、体系</h3>
@@ -500,16 +519,16 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
           </div>
           {showSystemsList ? (
             <>
-              <div className="mt-2 overflow-x-auto rounded-md border border-[oklch(84%_0.022_178)] bg-white">
-                <table className="w-full min-w-[920px] table-fixed text-left text-xs">
+              <div className="mt-2 overflow-hidden rounded-md border border-[oklch(84%_0.022_178)] bg-white">
+                <table className="w-full table-fixed text-left text-xs">
                   <thead className="bg-[oklch(42%_0.035_178)] text-white">
                     <tr>
-                      <th className="w-40 whitespace-nowrap px-2 py-1.5">中文名称</th>
-                      <th className="w-36 whitespace-nowrap px-2 py-1.5">英文简称</th>
-                      <th className="w-36 whitespace-nowrap px-2 py-1.5">类型</th>
-                      <th className="w-32 whitespace-nowrap px-2 py-1.5">最近检查时间</th>
-                      <th className="w-64 whitespace-nowrap px-2 py-1.5">备注</th>
-                      <th className="w-44 whitespace-nowrap px-2 py-1.5">操作</th>
+                      <th className="px-2 py-1.5">中文名称</th>
+                      <th className="px-2 py-1.5">英文简称</th>
+                      <th className="px-2 py-1.5">类型</th>
+                      <th className="px-2 py-1.5">最近检查时间</th>
+                      <th className="px-2 py-1.5">备注</th>
+                      <th className="px-2 py-1.5">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -626,7 +645,9 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
             />
           ) : null}
         </section>
+        ) : null}
 
+        {activeQueryMode === "jurisdiction" ? (
         <section className="border border-[oklch(82%_0.026_178)] bg-[oklch(99%_0.006_178)] px-3 py-3">
           <h3 className="text-base font-semibold">按国家/地区查询</h3>
           <div className="relative mt-3">
@@ -647,8 +668,7 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
                   >
                     <span className="font-semibold">{option.name_zh}</span>
                     <span className="ml-2 text-[oklch(44%_0.045_178)]">{option.code} · {option.name_en || "-"}</span>
-                    <span className="ml-2 text-xs text-[oklch(44%_0.045_178)]">{option.object_type_label || option.member_type || "对象"} · {option.master_status_label}</span>
-                    {option.has_reference_object ? <span className="ml-2 text-xs text-[oklch(42%_0.06_178)]">WIPO Lex</span> : null}
+                    <span className="ml-2 text-xs text-[oklch(44%_0.045_178)]">{option.master_status_label} · {option.object_type_label || option.member_type || "对象"}</span>
                   </button>
                 ))}
               </div>
@@ -661,8 +681,8 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
                 {selectedJurisdictions.map((item) => (
                   <span key={optionKey(item)} className="inline-flex items-center gap-1.5 rounded-md bg-[oklch(94%_0.02_178)] px-2 py-1 text-xs font-semibold">
                     {item.name_zh} {item.code}
-                    <span className="text-xs font-medium text-[oklch(44%_0.045_178)]">{item.object_type_label || item.member_type || "对象"} · {item.master_status_label}</span>
-                    {item.has_reference_object ? <span className="text-xs font-medium text-[oklch(42%_0.06_178)]">WIPO Lex</span> : null}
+                    <span className="text-xs font-medium text-[oklch(44%_0.045_178)]">{item.master_status_label}</span>
+                    <span className="text-xs font-medium text-[oklch(44%_0.045_178)]">{item.object_type_label || item.member_type || "对象"}</span>
                     <button className="text-[oklch(40%_0.05_28)]" type="button" onClick={() => removeJurisdiction(optionKey(item))}>移除</button>
                   </span>
                 ))}
@@ -686,19 +706,18 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
               <article key={group.jurisdiction_id || group.code} className="rounded-md border border-[oklch(84%_0.022_178)] bg-white p-2.5">
                 <div>
                   <h4 className="text-sm font-semibold">{group.name_zh} {group.code}</h4>
-                  <p className="mt-1 text-xs text-[oklch(44%_0.045_178)]">{group.name_en || "-"} · {group.master_status_label}</p>
+                  <p className="mt-1 text-xs text-[oklch(44%_0.045_178)]">{group.name_en || "-"} · {group.master_status_label} · {group.object_type_label || "对象"}</p>
                 </div>
-                {group.has_reference_object ? <ReferenceSummary group={group} /> : null}
                 {group.memberships.length ? (
-                  <div className="mt-3 overflow-x-auto rounded-md border border-[oklch(88%_0.018_178)]">
-                    <table className="w-full min-w-[880px] table-fixed text-left text-xs">
+                  <div className="mt-3 overflow-hidden rounded-md border border-[oklch(88%_0.018_178)]">
+                    <table className="w-full table-fixed text-left text-xs">
                       <thead className="bg-[oklch(94%_0.02_178)]">
                         <tr>
-                          <th className="w-48 whitespace-nowrap px-2 py-1.5">已加入/适用体系</th>
-                          <th className="w-32 whitespace-nowrap px-2 py-1.5">关系类型</th>
-                          <th className="w-56 whitespace-nowrap px-2 py-1.5">PCT 路径提示</th>
-                          <th className="w-36 whitespace-nowrap px-2 py-1.5">加入/生效/适用时间</th>
-                          <th className="w-72 whitespace-nowrap px-2 py-1.5">备注</th>
+                          <th className="px-2 py-1.5">已加入/适用体系</th>
+                          <th className="px-2 py-1.5">关系类型</th>
+                          <th className="px-2 py-1.5">PCT 路径提示</th>
+                          <th className="px-2 py-1.5">加入/生效/适用时间</th>
+                          <th className="px-2 py-1.5">备注</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -711,7 +730,7 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
                                 <span className="block truncate" title={membership.pct_route_type_label}>{membership.pct_route_type_label}</span>
                               ) : "-"}
                             </td>
-                            <td className="whitespace-nowrap px-2 py-1.5">{formatDate(membership.effective_date)}</td>
+                            <td className="px-2 py-1.5">{formatDate(membership.effective_date)}</td>
                             <td className="px-2 py-1.5"><span className="block truncate" title={membership.internal_remark || membership.route_remark || membership.remark || "-"}>{membership.internal_remark || membership.route_remark || membership.remark || "-"}</span></td>
                           </tr>
                         ))}
@@ -720,13 +739,14 @@ export function IpSystemsPanel({ currentUser, authToken }: IpSystemsPanelProps) 
                   </div>
                 ) : (
                   <p className="mt-3 rounded-md bg-[oklch(96%_0.008_178)] px-3 py-2 text-xs text-[oklch(44%_0.045_178)]">
-                    {group.has_reference_object ? "暂无独立条约/体系关系。" : "当前没有可展示的已确认条约/体系加入情况。"}
+                    当前没有可展示的已确认条约/体系加入情况。
                   </p>
                 )}
               </article>
             ))}
           </div>
         </section>
+        ) : null}
       </div>
     </div>
   );
@@ -1337,59 +1357,6 @@ function ReferenceObjectsPanel({
   );
 }
 
-function ReferenceSummary({ group }: { group: IpSystemJurisdictionMembershipGroup }) {
-  return (
-    <div className="mt-2 overflow-x-auto rounded-md border border-[oklch(88%_0.018_178)] bg-[oklch(98%_0.006_178)]">
-      <table className="w-full min-w-[860px] table-fixed text-left text-xs">
-        <tbody>
-          <tr className="border-b border-[oklch(88%_0.018_178)]">
-            <th className="w-24 whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">代码</th>
-            <td className="w-20 whitespace-nowrap px-2 py-1.5 font-semibold">{group.code || "-"}</td>
-            <th className="w-28 whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">类型</th>
-            <td className="w-36 whitespace-nowrap px-2 py-1.5">{group.object_type_label || "-"}</td>
-            <th className="w-28 whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">主档状态</th>
-            <td className="w-28 whitespace-nowrap px-2 py-1.5">{group.master_status_label || "-"}</td>
-            <th className="w-36 whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">WIPO Lex reference</th>
-            <td className="w-24 whitespace-nowrap px-2 py-1.5">
-              {group.reference_profile_url ? <a className="text-[oklch(35%_0.09_178)]" href={group.reference_profile_url} target="_blank" rel="noreferrer">有</a> : "有"}
-            </td>
-          </tr>
-          <tr className="border-b border-[oklch(88%_0.018_178)]">
-            <th className="whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">PCT 独立缔约国</th>
-            <td className="whitespace-nowrap px-2 py-1.5">{group.is_pct_contracting_state ? "是" : "否"}</td>
-            <th className="whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">Paris 独立缔约方</th>
-            <td className="whitespace-nowrap px-2 py-1.5">{group.is_paris_contracting_party ? "是" : "否"}</td>
-            <th className="whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">EPC</th>
-            <td className="whitespace-nowrap px-2 py-1.5">{referenceRelationLabel(group, "epc")}</td>
-            <th className="whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">EU Design/RCD</th>
-            <td className="whitespace-nowrap px-2 py-1.5">{referenceRelationLabel(group, "design")}</td>
-          </tr>
-          <tr>
-            <th className="whitespace-nowrap px-2 py-1.5 text-[oklch(44%_0.045_178)]">系统提示</th>
-            <td className="px-2 py-1.5" colSpan={7}>
-              <span className="block truncate" title={businessText(group.reference_system_hint || "-")}>{businessText(group.reference_system_hint || "-")}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function referenceRelationLabel(group: IpSystemJurisdictionMembershipGroup, relation: "epc" | "design"): string {
-  const isStateLike = !group.object_type || group.object_type === "country";
-  if (relation === "epc") {
-    if (group.epc_relation_type_label && group.epc_relation_type_label !== "否") {
-      return group.epc_relation_type_label;
-    }
-    return isStateLike ? "否" : "不适用";
-  }
-  if (group.is_eu_design_covered) {
-    return "是";
-  }
-  return isStateLike ? "否" : "不适用";
-}
-
 function StatsBlock({ response }: { response: IpSystemMembersResponse }) {
   const stats = response.stats;
   const relationSummary = Object.entries(stats.relation_type_counts || {})
@@ -1472,20 +1439,20 @@ function MemberTable({
 
   return (
     <div className="mt-3 space-y-3">
-      <div className="overflow-x-auto rounded-md border border-[oklch(84%_0.022_178)] bg-white">
-        <table className="w-full min-w-[1180px] table-fixed text-left text-xs">
+      <div className="overflow-hidden rounded-md border border-[oklch(84%_0.022_178)] bg-white">
+        <table className="w-full table-fixed text-left text-xs">
         <thead className="bg-[oklch(94%_0.02_178)]">
           <tr>
-            <th className="w-14 whitespace-nowrap px-2 py-1.5">序号</th>
+            <th className="px-2 py-1.5">序号</th>
             <SortableTh label={sortLabel("name_zh", "成员/区域局中文名")} onClick={() => toggleSort("name_zh")} />
             <SortableTh label={sortLabel("name_en", "英文名")} onClick={() => toggleSort("name_en")} />
             <SortableTh label={sortLabel("code", "代码")} onClick={() => toggleSort("code")} />
             <SortableTh label={sortLabel("effective_date", "加入/生效/适用时间")} onClick={() => toggleSort("effective_date")} />
             <SortableTh label={sortLabel("master_status_label", "是否已录入主档")} onClick={() => toggleSort("master_status_label")} />
             <SortableTh label={sortLabel("membership_relation_type_label", "关系类型")} onClick={() => toggleSort("membership_relation_type_label")} />
-            <th className="w-56 whitespace-nowrap px-2 py-1.5">PCT 路径提示</th>
+            <th className="px-2 py-1.5">PCT 路径提示</th>
             <SortableTh label={sortLabel("internal_remark", "内部备注")} onClick={() => toggleSort("internal_remark")} />
-            <th className="w-64 whitespace-nowrap px-2 py-1.5">官方备注</th>
+            <th className="px-2 py-1.5">官方备注</th>
           </tr>
         </thead>
         <tbody>
@@ -1506,7 +1473,7 @@ function MemberTable({
               </td>
               <td className="px-2 py-1.5">
                 {isAdmin && editingCode === member.code ? (
-                  <div className="flex min-w-56 flex-col gap-2">
+                  <div className="flex flex-col gap-2">
                     <textarea
                       className="min-h-16 rounded-md border border-[oklch(78%_0.028_178)] px-2 py-1 text-xs"
                       value={draftRemark}
@@ -1575,15 +1542,15 @@ function MemberTable({
             历史关系（仅供历史案件核对）{showHistorical ? " 收起" : " 展开"}
           </button>
           {showHistorical ? (
-            <div className="mt-2 overflow-x-auto rounded-md border border-[oklch(88%_0.018_178)]">
-              <table className="w-full min-w-[780px] table-fixed text-left text-xs">
+            <div className="mt-2 overflow-hidden rounded-md border border-[oklch(88%_0.018_178)]">
+              <table className="w-full table-fixed text-left text-xs">
                 <thead className="bg-[oklch(94%_0.02_178)]">
                   <tr>
-                    <th className="w-40 whitespace-nowrap px-2 py-1.5">国家/地区</th>
-                    <th className="w-16 whitespace-nowrap px-2 py-1.5">代码</th>
-                    <th className="w-32 whitespace-nowrap px-2 py-1.5">历史关系</th>
-                    <th className="w-28 whitespace-nowrap px-2 py-1.5">生效日期</th>
-                    <th className="w-96 whitespace-nowrap px-2 py-1.5">备注</th>
+                    <th className="px-2 py-1.5">国家/地区</th>
+                    <th className="px-2 py-1.5">代码</th>
+                    <th className="px-2 py-1.5">历史关系</th>
+                    <th className="px-2 py-1.5">生效日期</th>
+                    <th className="px-2 py-1.5">备注</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1608,7 +1575,7 @@ function MemberTable({
 
 function SortableTh({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <th className="w-36 whitespace-nowrap px-2 py-1.5">
+    <th className="px-2 py-1.5">
       <button className="block w-full truncate text-left font-semibold" type="button" onClick={onClick} title={label}>
         {label}
       </button>

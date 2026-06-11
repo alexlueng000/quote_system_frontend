@@ -35,6 +35,7 @@ import type {
   CustomerForm,
   Country,
   CountryBulkFromReferenceResponse,
+  CountryBulkFromReferenceStagingItem,
   CountryConfig,
   CountryCreate,
   CountryPathRule,
@@ -1007,11 +1008,22 @@ export default function Home() {
         name_en: country.name_en,
         display_code: country.display_code ?? country.code,
         enabled: country.enabled,
+        international_region: country.international_region ?? "",
         business_region: country.business_region ?? [],
         region_remark: country.region_remark ?? "",
         is_enabled: country.is_enabled ?? country.enabled,
+        source_note: country.source_note ?? "",
+        source_verified: country.source_verified ?? false,
+        source_verified_at: country.source_verified_at ?? null,
+        source_verified_by: country.source_verified_by ?? null,
         manual_override: country.manual_override ?? false,
         remarks: country.remarks ?? "",
+        default_office_jurisdiction_id: country.default_office_jurisdiction_id ?? null,
+        default_office_code: country.default_office_code ?? "",
+        default_office_name_cn: country.default_office_name_cn ?? "",
+        default_office_name_en: country.default_office_name_en ?? "",
+        default_office_type: country.default_office_type ?? "",
+        default_office_source_note: country.default_office_source_note ?? "",
       }),
     });
     if (!response.ok) {
@@ -1045,8 +1057,8 @@ export default function Home() {
       }),
     });
     if (!response.ok) {
-      const code = await readApiErrorCode(response);
-      setCountryConfigMessage(code === "COUNTRY_EXISTS" ? "国家/地区/受理局已存在。" : "国家/地区/受理局新增失败。");
+      const [code, message] = await Promise.all([readApiErrorCode(response.clone()), readApiErrorMessage(response)]);
+      setCountryConfigMessage(code === "COUNTRY_EXISTS" ? "国家/地区/受理局已存在。" : `国家/地区/受理局新增失败：${message || code || "请检查字段和权限。"}`);
       return false;
     }
     const created = (await response.json()) as Country;
@@ -1059,7 +1071,7 @@ export default function Home() {
     return true;
   }
 
-  async function bulkCreateCountriesFromReference(referenceIds: string[]): Promise<CountryBulkFromReferenceResponse> {
+  async function bulkCreateCountriesFromReference(referenceIds: string[], stagingItems: CountryBulkFromReferenceStagingItem[] = [], sourceVerified = false): Promise<CountryBulkFromReferenceResponse> {
     if (!selectedUser) {
       throw new Error("请先登录管理员账号。");
     }
@@ -1069,9 +1081,10 @@ export default function Home() {
       headers: { "Content-Type": "application/json", ...authHeaders(authToken, selectedUser.email) },
       body: JSON.stringify({
         reference_ids: referenceIds,
-        source_verified: true,
-        source_verified_by: selectedUser.email || "local_admin",
-        batch_note: "从本地 reference 批量添加",
+        staging_items: stagingItems,
+        source_verified: sourceVerified,
+        source_verified_by: sourceVerified ? selectedUser.email || "local_admin" : null,
+        batch_note: "",
       }),
     });
     if (!response.ok) {
@@ -1154,17 +1167,24 @@ export default function Home() {
     });
     if (!response.ok) {
       const message = await readApiErrorMessage(response);
-      setCountryConfigMessage(message || "国家/地区/受理局删除失败。");
+      setCountryConfigMessage(message || "该对象已有正式业务数据引用，请改为停用。");
       return false;
     }
-    setCountryConfig((current) => ({
-      ...current,
-      countries: current.countries.map((item) =>
-        item.code === country.code
-          ? { ...item, enabled: false, is_enabled: false, is_deleted: true, delete_reason: deleteReason }
-          : item,
-      ),
-    }));
+    const refreshed = await fetch(`${apiBase}/country-config?include_deleted=true`, {
+      headers: authHeaders(authToken, selectedUser.email),
+    });
+    if (refreshed.ok) {
+      setCountryConfig((await refreshed.json()) as CountryConfig);
+    } else {
+      setCountryConfig((current) => ({
+        ...current,
+        countries: current.countries.map((item) =>
+          item.code === country.code
+            ? { ...item, enabled: false, is_enabled: false, is_deleted: true, deleted_at: new Date().toISOString(), delete_reason: deleteReason }
+            : item,
+        ),
+      }));
+    }
     setCountryConfigMessage("国家/地区/受理局已软删除。");
     setConnection("online");
     return true;

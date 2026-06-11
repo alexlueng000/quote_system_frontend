@@ -57,7 +57,6 @@ function roleLabel(role: User["role"]): string {
 const countryConfigSubnav: { key: CountryRuleSection; label: string }[] = [
   { key: "overview", label: "管理视图" },
   { key: "countries", label: "国家/地区/受理局主档" },
-  { key: "region-sources", label: "来源管理 / 数据源管理" },
   { key: "treaty", label: "条约/体系成员信息查询" },
   { key: "path", label: "路径矩阵" },
   { key: "deadline", label: "期限程序" },
